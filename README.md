@@ -1,7 +1,7 @@
 # sourcemod-prune-assets
 Prune most unused assets in a sourcemod.<br>
 This file is meant to be used for final builds, where everything is cleaned up and there's nothing else left.
-----------------------------------------------------------------------------------<br>
+
 ## User Instructions:
 This file goes into the root directory of your sourcemod (e.g. for sourcemods/MyMod, you put it in MyMod).<br>
 You also need VMFs placed into the mod directory; anywhere is fine so long as you edit the MAP_FOLDER line to refer to your folder.
@@ -17,4 +17,3 @@ This is by no means the be-all-end-all solution; we take some liberties here but
 Quickly play through your build to make sure nothing's out of place once you're done.
 
 For the love of all that is your mod, please create a backup! I take no responsibility if my code somehow fucks up and irrevocably removes something critical to your mod!<br>
-----------------------------------------------------------------------------------
