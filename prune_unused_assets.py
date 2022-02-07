@@ -43,7 +43,8 @@ MODELS_TO_NOT_CHECK = ("weapons", "items", "gibs")
 ##
 VMT_PARAMS = ("$basetexture", "$bumpmap", "$detail", "$phongwarptexture", "$selfillummask",
                 "$basetexture2", "$blendmodulatetexture", "$bumpmap2", "%tooltexture", "$envmap",
-                "$fallbackmaterial", "$hdrcompressedtexture")
+                "$fallbackmaterial", "$hdrcompressedtexture", "$normalmap", "$dudvmap",
+                "$refracttinttexture", "$bottommaterial", "$reflecttexure", "$refracttexture")
 ##
 ## change this according to your mod's file structure
 ##
@@ -187,7 +188,7 @@ def traverse_and_evaluate() -> None:
         else:
             used_assets.append(scene)
 
-    # final check once and for all! may take forever but at least we clean it all up
+    # final check once and for all! takes forever but at least we clean it all up
     for asset in used_assets:
         unused_assets = remove_occ(unused_assets, asset)
     
