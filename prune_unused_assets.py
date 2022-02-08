@@ -1,10 +1,11 @@
 """
 Prune most unused assets in a sourcemod.
-This file is meant to be used for final builds, where everything is cleaned up and there's nothing else left.
+This file is meant to be used for final builds, where everything is ready and there's nothing else left to do.
 ----------------------------------------------------------------------------------
 USER INSTRUCTIONS:
 This file goes into the root directory of your sourcemod (e.g. for sourcemods/MyMod, you put it in MyMod).
 You also need VMFs placed into the mod directory; anywhere is fine so long as you edit the MAP_FOLDER line to refer to your folder.
+These VMFs must be one-to-one with your .bsp files; any small change might mean something gets removed that shouldn't.
 
 Above traverse_and_evaluate is a bunch of stuff you can configure; if your file structure is different or you don't want something pruned, change it there.
 Don't edit the imports, though.
@@ -17,6 +18,7 @@ This is by no means the be-all-end-all solution; we take some liberties here but
 Quickly play through your build to make sure nothing's out of place once you're done.
 
 For the love of all that is your mod, please create a backup! I take no responsibility if my code somehow fucks up and irrevocably removes something critical to your mod!
+
 ----------------------------------------------------------------------------------
 
 Created by arbabf, 2022. Code is released under an AGPL-3.0 licence if you acquired this file without reading the licence.
@@ -71,6 +73,8 @@ def traverse_and_evaluate() -> None:
     materials_models_to_search: list[str] = []
     scenes_to_search: list[str] = []
     unused_assets: list[str] = []
+    rest_str = lambda x: " ".join(x[1:]).lower().strip("\"")    # easy lambda function to avoid repeating code
+                                                                # also allows catching kvs with spaces in the v
     path_maps = os.walk(MAP_FOLDER)
     path_mat = os.walk(MATERIAL_FOLDER)
     path_mod = os.walk(MODEL_FOLDER)
@@ -92,16 +96,17 @@ def traverse_and_evaluate() -> None:
                         if len(l) <= 1:
                             continue
                         l[0] = l[0].strip("\"")
-                        l[1] = l[1].strip("\"").lower() # yes, this includes the directory path -
-                                                        # this means that cases such as humans/group01/male_07 and humans/group02/male_07 are treated differently
-                        if l[0] == "model" and " ".join(l[1:]).lower().strip("\"") not in model_list: # l[1:] is required in the freak case where a model has a space in the name
-                            model_list.append(" ".join(l[1:]).lower().strip("\""))
-                        elif (l[0] == "material" or l[0] == "texture") and not l[1].isdigit() and "".join([MATERIAL_FOLDER + "/", l[1].lower(), ".vmt"]) not in material_list: # we need the isdigit() for func_breakables that spill in, and "texture" for infodecal entities
-                            material_list.append("".join([MATERIAL_FOLDER + "/", l[1].lower(), ".vmt"])) # materials by default don't have the .vmt extension in vmfs so we gotta add them (this helps later)
+                        l[1] = rest_str(l)  # yes, this includes the directory path -
+                                            # this means that cases such as humans/group01/male_07 and humans/group02/male_07 are treated differently
+                                            # due to how valve stores their vmfs in kv format we can safely use this since keys cannot have spaces (very cool)
+                        if l[0] == "model" and l[1] not in model_list:
+                            model_list.append(l[1])
+                        elif (l[0] == "material" or l[0] == "texture") and not l[1].isdigit() and "".join([MATERIAL_FOLDER + "/", l[1], ".vmt"]) not in material_list: # we need the isdigit() for func_breakables that spill in, and "texture" for infodecal entities
+                            material_list.append("".join([MATERIAL_FOLDER + "/", l[1], ".vmt"])) # materials by default don't have the .vmt extension in vmfs so we gotta add them (this helps later)
                         elif l[0] == "SceneFile" and l[1] not in scene_list:
-                            scene_list.append(l[1].lower())
-                        elif l[0] == "skyname" and l[1].lower() not in sky_list:
-                            sky_list.append(l[1].lower())
+                            scene_list.append(l[1])
+                        elif l[0] == "skyname" and l[1] not in sky_list:
+                            sky_list.append(l[1])
                 f.close()
                 print("Finished scraping {0}. ({1} lines checked)".format(file, line_count))
     for sky in sky_list:
@@ -247,17 +252,6 @@ def binary_search(lst: list[T], thing: T) -> int:
         else:
             end = mid-1
     return -1
-
-# def is_number(s: str) -> bool:
-#     """
-#     https://stackoverflow.com/questions/354038/how-do-i-check-if-a-string-is-a-number-float
-#     Unused as of now.
-#     """
-#     try:
-#         float(s)
-#         return True
-#     except ValueError:
-#         return False
 
 if __name__ == "__main__":
     traverse_and_evaluate()
