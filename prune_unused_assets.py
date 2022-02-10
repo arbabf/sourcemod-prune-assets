@@ -8,7 +8,9 @@ You also need VMFs placed into the mod directory; anywhere is fine so long as yo
 These VMFs must be one-to-one with your .bsp files; any small change might mean something gets removed that shouldn't.
 
 Above traverse_and_evaluate is a bunch of stuff you can configure; if your file structure is different or you don't want something pruned, change it there.
-Don't edit the imports, though.
+If you don't want to search the root folder, use "~/" in the appropriate list to not check.
+Some Proppered models may have missing textures; in this case, add the folder of the missing textures to MATERIALS_TO_NOT_CHECK.
+Don't edit the imports.
 
 To run, you will need to have Python 3 installed. (I have no idea about version so 3.9 is your safest bet).
 Then, open a command prompt window, navigate to your mod's root directory and type 'python3 prune_unused_assets.py' without quotes.
@@ -36,9 +38,9 @@ SKY_SIDES = ("bk", "dn", "ft", "lf", "rt", "up")
 ##
 ## something missing ingame? add the folder of whatever was removed here
 ##
-MATERIALS_TO_NOT_CHECK = ("models", "models/weapons", "vgui", "particle",
+MATERIALS_TO_NOT_CHECK = ("models", "models/weapons", "vgui", "particle", "decals",
                             "sprites", "effects", "envmap", "console", "composite", "building_template")
-MODELS_TO_NOT_CHECK = ("weapons", "items", "gibs")
+MODELS_TO_NOT_CHECK = ("weapons", "items", "gibs", "~/")
 
 ##
 ## does your mod use more or fewer extra texture types for your vmts (e.g. roughness)? add/remove where applicable
@@ -73,6 +75,8 @@ def traverse_and_evaluate() -> None:
     materials_models_to_search: list[str] = []
     scenes_to_search: list[str] = []
     unused_assets: list[str] = []
+    mdl_allow_root = "~/" not in MODELS_TO_NOT_CHECK
+    mat_allow_root = "~/" not in MATERIALS_TO_NOT_CHECK
     rest_str = lambda x: " ".join(x[1:]).lower().strip("\"")    # easy lambda function to avoid repeating code
                                                                 # also allows catching kvs with spaces in the v
     path_maps = os.walk(MAP_FOLDER)
@@ -116,12 +120,12 @@ def traverse_and_evaluate() -> None:
 
     for p, _, files in path_mat:
         for file in files:
-            if file.endswith(".vmt") and not any(x in p.lower() for x in MATERIALS_TO_NOT_CHECK):
+            if file.endswith(".vmt") and not (any(x in p.lower() for x in MATERIALS_TO_NOT_CHECK) or (p == MATERIAL_FOLDER and not mat_allow_root)):
                 materials_to_search.append(os.path.join(p.lower(), file.lower().replace("\\", "/")))
 
     for p, _, files in path_mod:
         for file in files:
-            if file.endswith(".mdl") and not any(x in p.lower() for x in MODELS_TO_NOT_CHECK):
+            if file.endswith(".mdl") and not (any(x in p.lower() for x in MODELS_TO_NOT_CHECK) or (p == MODEL_FOLDER and not mdl_allow_root)):
                 models_to_search.append(os.path.join(p.lower(), file.lower()).replace("\\", "/"))
 
     for p, _, files in path_mat_mod:
@@ -130,7 +134,8 @@ def traverse_and_evaluate() -> None:
     
     for p, _, files in path_scenes:
         for file in files:
-            scenes_to_search.append(os.path.join(p, file.lower()).replace("\\", "/"))
+            if file.endswith(".vcd"):
+                scenes_to_search.append(os.path.join(p, file.lower()).replace("\\", "/"))
     print("Finished gathering assets.")
     model_list.sort()
     material_list.sort()
@@ -151,21 +156,22 @@ def traverse_and_evaluate() -> None:
     
     used_assets = []
 
-    for asset in unused_assets:
-        materials_in_game = remove_occ(materials_in_game, asset)
+    materials_in_game.sort()
+    unused_assets.sort()
+    fast_remove(unused_assets, materials_in_game)
 
     for tex in materials_in_game:
         if tex.endswith(".vmt"):
             used_assets = get_textures_from_vmts(tex, used_assets)
-        used_assets.append(tex)
+            used_assets.append(tex)
 
     for modmat in materials_models_to_search:
         if modmat.endswith(".vmt"):
             used_assets = get_textures_from_vmts(modmat, used_assets)
             used_assets.append(modmat) # so textures for proppered buildings are kept
 
-    for asset in used_assets:
-        unused_assets = remove_occ(unused_assets, asset)
+    used_assets.sort()
+    fast_remove(used_assets, unused_assets)
 
     stop = len(unused_assets)
     for count, val in enumerate(unused_assets):
@@ -177,15 +183,14 @@ def traverse_and_evaluate() -> None:
             break
         
     for mod in models_to_search:
-        if binary_search(model_list, mod) == -1 and len(mod.split("/")) > 2: #i.e. don't take from the root models/ directory
-                                                                            #(hack for rtb:r; if this is not rtb:r, edit accordingly)
+        if binary_search(model_list, mod) == -1:
             unused_assets.append(mod)
             for efm in EXTRA_FILES_MODELS:
                 unused_assets.append(mod.replace(".mdl", efm))
-            x = mod.replace(".mdl", "").split("/")[1:-1] # e.g. models/humans/alyx.mdl -> humans/alyx
-            for modmat in materials_models_to_search:
-                if "".join(x) in modmat:
-                    unused_assets.append("".join([MATERIAL_MODEL_FOLDER, modmat])) # prune the textures that also appear with these models
+            # x = mod.replace(".mdl", "").split("/")[1:-1] # e.g. models/humans/alyx.mdl -> humans/alyx
+            # for modmat in materials_models_to_search:
+            #     if "".join(x) in modmat:
+            #         unused_assets.append(modmat) # prune the textures that also appear with these models
 
     for scene in scenes_to_search:
         if binary_search(scene_list, scene) == -1:
@@ -193,10 +198,10 @@ def traverse_and_evaluate() -> None:
         else:
             used_assets.append(scene)
 
-    # final check once and for all! takes forever but at least we clean it all up
-    for asset in used_assets:
-        unused_assets = remove_occ(unused_assets, asset)
-    
+    # final check once and for all! may take forever but at least we clean it all up
+    used_assets.sort()
+    unused_assets.sort()
+    fast_remove(used_assets, unused_assets)
     print("Collated unused content.")
     print("Writing unused assets and removing them...")
     f = open("unused_assets.txt", "w")
@@ -218,7 +223,8 @@ def print_to_file(filename, lst):
     """
     f = open(filename, "w")
     for elem in lst:
-        f.write("".join([elem + "\n"]))
+        if elem != '':
+            f.write("".join([elem + "\n"]))
 
 def get_textures_from_vmts(file: str, lst: list[str]) -> list[str]:
     """
@@ -234,6 +240,27 @@ def get_textures_from_vmts(file: str, lst: list[str]) -> list[str]:
                                                                                                         # in case the user is insane and names files as numbers (e.g. 35.vtf)
     vmt.close()
     return lst
+
+def fast_remove(list1: list[str], list2: list[str]) -> list[str]:
+    """
+    O(n) remove.
+    Requires that both lists be sorted, so the time complexity is actually O(nlogn) if used in conjunction.
+    Input: list1 - the list with stuff you want removed, and list2 - the list you want to remove stuff *from*.
+    Output: list2 with all removed assets as blanks.
+    """
+    i = 0
+    j = 0
+    while i < len(list1) and j < len(list2):
+        if list1[i] == list2[j]:
+            list2[j] = ""   # yes, i realise that this is not actually 'removing' the item from the list but removal requires traversing the list again, which
+                            # increases time complexity, and that is not blisteringly fast which is the point of this method in the first place
+                            # this method, in practice, is faster
+            j += 1
+        elif list1[i] < list2[j]:
+            i += 1
+        else: # list1[i] > list2[j]
+            j += 1
+    return list2
 
 def binary_search(lst: list[T], thing: T) -> int:
     """
